@@ -1,32 +1,22 @@
-# .gitignore
+# icons\icon-16.png
 
-```
-# Logs
-logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
+This is a binary file of the type: Image
 
-node_modules
-dist
-dist-ssr
-*.local
+# icons\icon-32.png
 
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
-.DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
+This is a binary file of the type: Image
 
-```
+# icons\icon-128.png
+
+This is a binary file of the type: Image
+
+# icons\not-recording.png
+
+This is a binary file of the type: Image
+
+# icons\recording.png
+
+This is a binary file of the type: Image
 
 # manifest.json
 
@@ -41,34 +31,20 @@ dist-ssr
     "32": "public/icon-32.png",
     "128": "public/icon-128.png"
   },
+  "minimum_chrome_version": "116",
   "action": {
-    "default_title": "Open Meet Speaker Insights"
+    "default_title": "Open Meet Speaker Insights",
+    "default_icon": "public/icon-16.png",
+    "default_popup": "popup.html"
   },
-  "permissions": [
-    "sidePanel",
-    "storage",
-    "downloads",
-    "offscreen",
-    "tabCapture"
-  ],
-  "host_permissions": ["https://meet.google.com/*"],
   "background": {
-    "service_worker": "src/background.ts",
-    "type": "module"
+    "service_worker": "service-worker.js"
   },
-  "side_panel": {
-    "default_path": "src/sidepanel/app.html"
-  },
-  "content_scripts": [
-    {
-      "matches": ["https://meet.google.com/*"],
-      "js": ["src/content/meet.ts"],
-      "run_at": "document_idle"
-    }
-  ],
+  "permissions": ["tabCapture", "offscreen", "activeTab", "storage"],
+  "host_permissions": ["https://meet.google.com/*"],
   "web_accessible_resources": [
     {
-      "resources": ["src/sidepanel/offscreen.html"],
+      "resources": ["permission.html", "offscreen.html"],
       "matches": ["<all_urls>"]
     }
   ]
@@ -76,287 +52,544 @@ dist-ssr
 
 ```
 
-# package.json
-
-```json
-{
-  "name": "meet-behavior-tracker",
-  "private": true,
-  "version": "0.0.0",
-  "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "build": "tsc && vite build",
-    "preview": "vite preview"
-  },
-  "devDependencies": {
-    "@crxjs/vite-plugin": "^2.2.0",
-    "@tailwindcss/vite": "^4.1.13",
-    "typescript": "~5.8.3",
-    "vite": "^7.1.6",
-    "@types/chrome": "^0.1.12"
-  },
-  "dependencies": {
-    "@tailwindcss/postcss": "^4.1.13",
-    "lit": "^3.3.1",
-    "postcss": "^8.5.6",
-    "tailwindcss": "^4.1.13"
-  }
-}
-
-```
-
-# postcss.config.mjs
-
-```mjs
-export default {
-  plugins: {
-    "@tailwindcss/postcss": {},
-  },
-};
-
-```
-
-# public\icon-16.png
-
-This is a binary file of the type: Image
-
-# public\icon-32.png
-
-This is a binary file of the type: Image
-
-# public\icon-128.png
-
-This is a binary file of the type: Image
-
-# src\background.ts
-
-```ts
-chrome.runtime.onInstalled.addListener(async () => {
-  try {
-    await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
-  } catch (err) {
-    console.error("sidePanel error", err);
-  }
-});
-
-chrome.runtime.onStartup.addListener(() => {
-  ensureOffscreen();
-});
-
-async function ensureOffscreen() {
-  const hasDoc = await chrome.offscreen.hasDocument();
-  if (!hasDoc) {
-    await chrome.offscreen.createDocument({
-      url: "src/sidepanel/offscreen.html",
-      reasons: ["AUDIO_PLAYBACK"],
-      justification: "Needed to prepare audio recording",
-    });
-  }
-}
-ensureOffscreen();
-
-chrome.runtime.onConnect.addListener((port) => {
-  console.log("🔌 Connected to:", port.name);
-});
-
-```
-
-# src\content\meet.ts
-
-```ts
-console.log("[Meet Speaker Insights] content script running");
-
-```
-
-# src\sidepanel\app.html
-
-```html
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Meet Speaker Insights</title>
-    <link rel="stylesheet" href="/src/style.css" />
-  </head>
-  <body class="h-screen w-full bg-white text-gray-900 dark:bg-zinc-900 dark:text-zinc-50">
-    <app-root></app-root>
-    <script type="module" src="/src/sidepanel/app.ts"></script>
-  </body>
-</html>
-
-```
-
-# src\sidepanel\app.ts
-
-```ts
-import { LitElement, html, css } from "lit";
-import { customElement, state } from "lit/decorators.js";
-import tailwindStyles from "../style.css?inline";
-
-const sheet = new CSSStyleSheet();
-sheet.replaceSync(tailwindStyles);
-
-const ui_panel_port = chrome.runtime.connect({ name: "UI_PANEL" });
-@customElement("app-root")
-export class AppRoot extends LitElement {
-  @state()
-  recording = false;
-
-  static styles = [sheet, css``];
-
-  connectedCallback() {
-    super.connectedCallback();
-    ui_panel_port.onMessage.addListener((msg) => {
-      console.log("📨 Msg from UI_PANEL:", msg);
-    });
-
-    ui_panel_port.postMessage({ type: "PONG", from: "Init Panel Ready" });
-  }
-
-  disconnectedCallback() {
-    super.disconnectedCallback();
-    ui_panel_port.onMessage.removeListener((msg) => {
-      console.log("📨 Msg from UI_PANEL:", msg);
-    });
-  }
-
-  render() {
-    return html`
-      <div class="p-4 flex flex-col h-full">
-        <header class="pb-4 border-b border-zinc-700">
-          <h1 class="text-xl font-bold">Meet Speaker Insights</h1>
-          <span
-            class="text-sm ${this.recording ? "text-red-500" : "text-gray-400"}"
-          >
-            ${this.recording ? "● Recording" : "Idle"}
-          </span>
-        </header>
-
-        <main class="flex-grow flex flex-col justify-center items-center gap-4">
-          <p>Panel Ready (Lit + Tailwind v4)</p>
-          <div class="flex gap-3">
-            <button
-              @click=${() => (this.recording = true)}
-              class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
-            >
-              Start
-            </button>
-            <button
-              @click=${() => (this.recording = false)}
-              class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded"
-            >
-              Stop
-            </button>
-          </div>
-        </main>
-
-        <footer
-          class="text-center text-xs text-gray-500 pt-4 border-t border-zinc-700"
-        >
-          v0.1 — init step
-        </footer>
-      </div>
-    `;
-  }
-}
-
-```
-
-# src\sidepanel\offscreen.html
+# offscreen.html
 
 ```html
 <!DOCTYPE html>
-<html lang="en">
+<html>
   <head>
-    <meta charset="UTF-8" />
-    <title>Offscreen Recorder</title>
+    <title>Recording Handler</title>
   </head>
   <body>
-    <script type="module" src="/src/sidepanel/offscreen.ts"></script>
+    <script src="offscreen.js"></script>
   </body>
 </html>
 
 ```
 
-# src\sidepanel\offscreen.ts
+# offscreen.js
 
-```ts
-const port = chrome.runtime.connect({ name: "OFFSCREEN" });
+```js
+let recorder;
+let data = [];
+let activeStreams = [];
 
-port.postMessage({ type: "PONG", from: "Init Offscreen Ready" });
-```
+chrome.runtime.onMessage.addListener(async (message) => {
+  if (message.target === "offscreen") {
+    switch (message.type) {
+      case "start-recording":
+        startRecording(message.data);
+        break;
+      case "stop-recording":
+        stopRecording();
+        break;
+      default:
+        throw new Error("Unrecognized message:", message.type);
+    }
+  }
+});
 
-# src\style.css
+async function startRecording(streamId) {
+  if (recorder?.state === "recording") {
+    throw new Error("Called startRecording while recording is in progress.");
+  }
 
-```css
-@import "tailwindcss";
-```
+  await stopAllStreams();
 
-# src\types.ts
+  try {
+    // Get tab audio stream
+    const tabStream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        mandatory: {
+          chromeMediaSource: "tab",
+          chromeMediaSourceId: streamId,
+        },
+      },
+      video: false,
+    });
 
-```ts
+    // Get microphone stream with noise cancellation
+    const micStream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
+      video: false,
+    });
 
-```
+    activeStreams.push(tabStream, micStream);
 
-# src\vite-env.d.ts
+    // Create audio context
+    const audioContext = new AudioContext();
 
-```ts
-/// <reference types="vite/client" />
+    // Create sources and destination
+    const tabSource = audioContext.createMediaStreamSource(tabStream);
+    const micSource = audioContext.createMediaStreamSource(micStream);
+    const destination = audioContext.createMediaStreamDestination();
 
-```
+    // Create gain nodes
+    const tabGain = audioContext.createGain();
+    const micGain = audioContext.createGain();
 
-# tsconfig.json
+    // Set gain values
+    tabGain.gain.value = 1.0; // Normal tab volume
+    micGain.gain.value = 1.5; // Slightly boosted mic volume
 
-```json
-{
-  "compilerOptions": {
-    "target": "ES2022",
-    "useDefineForClassFields": true,
-    "module": "ESNext",
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "skipLibCheck": true,
+    // Connect tab audio to both speakers and recorder
+    tabSource.connect(tabGain);
+    tabGain.connect(audioContext.destination);
+    tabGain.connect(destination);
 
-    /* Bundler mode */
-    "moduleResolution": "bundler",
-    "allowImportingTsExtensions": true,
-    "verbatimModuleSyntax": true,
-    "moduleDetection": "force",
-    "noEmit": true,
+    // Connect mic to recorder only (prevents echo)
+    micSource.connect(micGain);
+    micGain.connect(destination);
 
-    /* Linting */
-    "strict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "erasableSyntaxOnly": true,
-    "noFallthroughCasesInSwitch": true,
-    "noUncheckedSideEffectImports": true,
-    "experimentalDecorators": true,
-    "emitDecoratorMetadata": true
-  },
-  "include": ["src"]
+    // Start recording
+    recorder = new MediaRecorder(destination.stream, {
+      mimeType: "audio/webm",
+    });
+    recorder.ondataavailable = (event) => data.push(event.data);
+    recorder.onstop = () => {
+      const blob = new Blob(data, { type: "audio/webm" });
+      const url = URL.createObjectURL(blob);
+
+      // Create temporary link element to trigger download
+      const downloadLink = document.createElement("a");
+      downloadLink.href = url;
+      downloadLink.download = `recording-${new Date().toISOString()}.webm`;
+      downloadLink.click();
+
+      // Cleanup
+      URL.revokeObjectURL(url);
+      recorder = undefined;
+      data = [];
+
+      chrome.runtime.sendMessage({
+        type: "recording-stopped",
+        target: "service-worker",
+      });
+    };
+
+    recorder.start();
+    window.location.hash = "recording";
+
+    chrome.runtime.sendMessage({
+      type: "update-icon",
+      target: "service-worker",
+      recording: true,
+    });
+  } catch (error) {
+    console.error("Error starting recording:", error);
+    chrome.runtime.sendMessage({
+      type: "recording-error",
+      target: "popup",
+      error: error.message,
+    });
+  }
+}
+
+async function stopRecording() {
+  if (recorder && recorder.state === "recording") {
+    recorder.stop();
+  }
+
+  await stopAllStreams();
+  window.location.hash = "";
+
+  chrome.runtime.sendMessage({
+    type: "update-icon",
+    target: "service-worker",
+    recording: false,
+  });
+}
+
+async function stopAllStreams() {
+  activeStreams.forEach((stream) => {
+    stream.getTracks().forEach((track) => {
+      track.stop();
+    });
+  });
+
+  activeStreams = [];
+  await new Promise((resolve) => setTimeout(resolve, 100));
 }
 
 ```
 
-# vite.config.ts
+# permission.html
 
-```ts
-import { defineConfig } from "vite";
-import { crx } from "@crxjs/vite-plugin";
-import tailwindcss from "@tailwindcss/vite";
-import manifest from "./manifest.json";
+```html
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Audio Recorder - Permission Request</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        margin: 0;
+        background-color: #f5f5f5;
+      }
+      .container {
+        background: white;
+        padding: 30px;
+        border-radius: 8px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        text-align: center;
+        max-width: 500px;
+      }
+      .button {
+        background-color: #4285f4;
+        color: white;
+        border: none;
+        padding: 12px 24px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 16px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Microphone Permission Required</h1>
+      <p>
+        To record audio, this extension needs permission to use your microphone.
+      </p>
+      <button id="requestPermission" class="button">
+        Allow Microphone Access
+      </button>
+      <p id="status"></p>
+    </div>
+    <script src="permission.js"></script>
+  </body>
+</html>
 
-export default defineConfig({
-  plugins: [
-    crx({ manifest }), 
-    tailwindcss() // التكامل صحيح تمامًا
-  ], 
-  build: {
-    target: "es2020",
-    sourcemap: true, // ممتاز لتصحيح الأخطاء
-  },
+```
+
+# permission.js
+
+```js
+document
+  .getElementById("requestPermission")
+  .addEventListener("click", async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach((track) => track.stop());
+
+      document.getElementById("status").textContent =
+        "Permission granted! You can close this tab.";
+
+      setTimeout(() => {
+        window.close();
+      }, 2000);
+    } catch (error) {
+      document.getElementById("status").textContent =
+        "Permission denied. Please try again.";
+    }
+  });
+
+```
+
+# popup.html
+
+```html
+<!DOCTYPE html>
+<html>
+  <head>
+    <style>
+      body {
+        width: 200px;
+        padding: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      button {
+        padding: 10px;
+        font-size: 14px;
+        cursor: pointer;
+        border: none;
+        border-radius: 4px;
+        width: 100%;
+        opacity: 0; /* Start with 0 opacity */
+        transition: opacity 0.3s ease-in-out; /* Smooth transition for opacity */
+        position: absolute; /* Prevent layout shifting */
+      }
+
+      #startRecord {
+        background: #4caf50;
+        color: white;
+        display: none;
+      }
+
+      #stopRecord {
+        background: #f44336;
+        color: white;
+        display: none;
+      }
+
+      /* New class for visible buttons */
+      button.visible {
+        opacity: 1;
+      }
+
+      /* Add a container for the buttons to maintain layout */
+      .button-container {
+        position: relative;
+        height: 38px; /* Height of your buttons */
+        margin: 10px 0;
+      }
+
+      button:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+      #permissionStatus {
+        margin: 10px 0;
+        padding: 10px;
+        border-radius: 4px;
+        display: none;
+        background-color: #fff3e0;
+        color: #ef6c00;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="permissionStatus"></div>
+    <div class="button-container">
+      <button id="startRecord">Start Recording</button>
+      <button id="stopRecord">Stop Recording</button>
+    </div>
+    <script src="popup.js"></script>
+  </body>
+</html>
+
+```
+
+# popup.js
+
+```js
+// Get button elements
+const startButton = document.getElementById("startRecord");
+const stopButton = document.getElementById("stopRecord");
+
+let permissionStatus = document.getElementById("permissionStatus");
+
+function showError(message) {
+  permissionStatus.textContent = message;
+  permissionStatus.style.display = "block";
+}
+
+function hideError() {
+  permissionStatus.style.display = "none";
+}
+
+async function checkMicrophonePermission() {
+  try {
+    await navigator.mediaDevices.getUserMedia({ audio: true });
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
+
+// Check recording state when popup opens
+async function checkRecordingState() {
+  const hasPermission = await checkMicrophonePermission();
+  if (!hasPermission) {
+    chrome.tabs.create({ url: "permission.html" });
+    return;
+  }
+
+  const contexts = await chrome.runtime.getContexts({});
+  const offscreenDocument = contexts.find(
+    (c) => c.contextType === "OFFSCREEN_DOCUMENT"
+  );
+
+  if (
+    offscreenDocument &&
+    offscreenDocument.documentUrl.endsWith("#recording")
+  ) {
+    stopButton.style.display = "block";
+    setTimeout(() => stopButton.classList.add("visible"), 10);
+  } else {
+    startButton.style.display = "block";
+    setTimeout(() => startButton.classList.add("visible"), 10);
+  }
+}
+
+// Call checkRecordingState when popup opens
+document.addEventListener("DOMContentLoaded", checkRecordingState);
+
+// Add button click listeners
+startButton.addEventListener("click", async () => {
+  try {
+    const [tab] = await chrome.tabs.query({
+      active: true,
+      currentWindow: true,
+    });
+
+    if (
+      !tab ||
+      tab.url.startsWith("chrome://") ||
+      tab.url.startsWith("chrome-extension://")
+    ) {
+      alert(
+        "Cannot record Chrome system pages. Please try on a regular webpage."
+      );
+      return;
+    }
+
+    // Create offscreen document if not exists
+    const contexts = await chrome.runtime.getContexts({});
+    const offscreenDocument = contexts.find(
+      (c) => c.contextType === "OFFSCREEN_DOCUMENT"
+    );
+
+    if (!offscreenDocument) {
+      await chrome.offscreen.createDocument({
+        url: "offscreen.html",
+        reasons: ["USER_MEDIA"],
+        justification: "Recording from chrome.tabCapture API",
+      });
+    }
+
+    // Get stream ID and start recording
+    const streamId = await chrome.tabCapture.getMediaStreamId({
+      targetTabId: tab.id,
+    });
+
+    chrome.runtime.sendMessage({
+      type: "start-recording",
+      target: "offscreen",
+      data: streamId,
+    });
+
+    startButton.classList.remove("visible");
+    setTimeout(() => {
+      startButton.style.display = "none";
+      stopButton.style.display = "block";
+      setTimeout(() => stopButton.classList.add("visible"), 10);
+    }, 300);
+  } catch (error) {
+    alert("Failed to start recording: " + error.message);
+  }
 });
+
+stopButton.addEventListener("click", () => {
+  setTimeout(() => {
+    chrome.runtime.sendMessage({
+      type: "stop-recording",
+      target: "offscreen",
+    });
+  }, 500);
+
+  stopButton.classList.remove("visible");
+  setTimeout(() => {
+    stopButton.style.display = "none";
+    startButton.style.display = "block";
+    setTimeout(() => startButton.classList.add("visible"), 10);
+  }, 300);
+});
+
+// Listen for messages from offscreen document and service worker
+chrome.runtime.onMessage.addListener((message) => {
+  if (message.target === "popup") {
+    switch (message.type) {
+      case "recording-error":
+        alert(message.error);
+        startButton.style.display = "block";
+        stopButton.style.display = "none";
+        break;
+      case "recording-stopped":
+        startButton.style.display = "block";
+        stopButton.style.display = "none";
+        break;
+    }
+  }
+});
+
+```
+
+# README.md
+
+```md
+
+```
+
+# service-worker.js
+
+```js
+chrome.runtime.onMessage.addListener(async (message) => {
+  if (message.target === "service-worker") {
+    switch (message.type) {
+      case "request-recording":
+        try {
+          const [tab] = await chrome.tabs.query({
+            active: true,
+            currentWindow: true,
+          });
+
+          // Check if we can record this tab
+          if (
+            !tab ||
+            tab.url.startsWith("chrome://") ||
+            tab.url.startsWith("chrome-extension://")
+          ) {
+            chrome.runtime.sendMessage({
+              type: "recording-error",
+              target: "offscreen",
+              error:
+                "Cannot record Chrome system pages. Please try on a regular webpage.",
+            });
+            return;
+          }
+
+          // Ensure we have access to the tab
+          await chrome.tabs.update(tab.id, {});
+
+          // Get a MediaStream for the active tab
+          const streamId = await chrome.tabCapture.getMediaStreamId({
+            targetTabId: tab.id,
+          });
+
+          // Send the stream ID to the offscreen document to start recording
+          chrome.runtime.sendMessage({
+            type: "start-recording",
+            target: "offscreen",
+            data: streamId,
+          });
+
+          chrome.action.setIcon({ path: "/icons/recording.png" });
+        } catch (error) {
+          chrome.runtime.sendMessage({
+            type: "recording-error",
+            target: "offscreen",
+            error: error.message,
+          });
+        }
+        break;
+
+      case "recording-stopped":
+        chrome.action.setIcon({ path: "icons/not-recording.png" });
+        break;
+
+      case "update-icon":
+        chrome.action.setIcon({
+          path: message.recording
+            ? "icons/recording.png"
+            : "icons/not-recording.png",
+        });
+        break;
+    }
+  }
+});
+
 ```
 
