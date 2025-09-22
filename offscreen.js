@@ -1,9 +1,13 @@
 let recorder;
-let activeStream = null;
 let chunks = [];
-// NEW: monitor nodes for local audio playback
+
+// streams & nodes
+let tabStream = null;
+let micStream = null;
 let audioContext = null;
 let tabSourceNode = null;
+let micSourceNode = null;
+let mixDestination = null; // MediaStreamDestination for recorder
 
 chrome.runtime.onMessage.addListener(async (message) => {
   if (message.target !== "offscreen") return;
@@ -19,88 +23,76 @@ chrome.runtime.onMessage.addListener(async (message) => {
   }
 });
 
-async function startRecording(streamId) {
+async function startRecording(payload) {
+  const { streamId, includeMic } = normalizePayload(payload);
+
   if (recorder?.state === "recording") {
     throw new Error("startRecording called while already recording");
   }
-
-  // Ensure any previous stream is closed
-  await stopAllTracks();
+  await cleanupAll();
   chunks = [];
 
   try {
-    // Acquire TAB audio only (no microphone)
-    const tabStream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        mandatory: {
-          chromeMediaSource: "tab",
-          chromeMediaSourceId: streamId
-        }
-      },
+    // 1) Get TAB audio (no video)
+    tabStream = await navigator.mediaDevices.getUserMedia({
+      audio: { mandatory: { chromeMediaSource: "tab", chromeMediaSourceId: streamId } },
       video: false
     });
 
-    activeStream = tabStream;
-
-    // 1) Local monitor: play tab audio through speakers
-    audioContext = new AudioContext();
-    tabSourceNode = audioContext.createMediaStreamSource(tabStream);
-    tabSourceNode.connect(audioContext.destination);
-    try { 
-      await audioContext.resume(); 
-    } catch (err) {
-      console.warn('[offscreen] AudioContext resume failed:', err);
-    }
-
-    // 2) Record tab stream directly (no AudioContext mixing, no echo)
-    recorder = new MediaRecorder(tabStream, {
-      mimeType: "audio/webm;codecs=opus"
-    });
-
-    recorder.ondataavailable = (ev) => {
-      if (ev.data && ev.data.size > 0) {
-        chunks.push(ev.data);
-      }
-    };
-
-    recorder.onstop = async () => {
+    // 2) Optionally get MIC
+    if (includeMic) {
       try {
-        const blob = new Blob(chunks, { type: "audio/webm" });
-        const url = URL.createObjectURL(blob);
-
-        // Send blob data to service worker for download handling
-        const filename = `meet-audio-${new Date().toISOString().replace(/[:]/g, "-")}.webm`;
-        chrome.runtime.sendMessage({
-          type: "download-recording",
-          target: "service-worker",
-          url: url,
-          filename: filename
+        micStream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+          },
+          video: false
         });
-      } catch (err) {
-        console.error("[offscreen] Finalize error:", err);
+      } catch (e) {
+        // If user denies mic, fall back to tab-only
+        micStream = null;
         chrome.runtime.sendMessage({
           type: "recording-error",
           target: "popup",
-          error: err?.message || String(err)
+          error: "Microphone permission denied. Continuing with tab-only audio."
         });
-      } finally {
-        recorder = undefined;
-        chunks = [];
-        await stopAllTracks();
-        window.location.hash = "";
-        // Notify both SW and Popup so UI updates even if popup is open
-        chrome.runtime.sendMessage({ type: "recording-stopped", target: "service-worker" });
-        chrome.runtime.sendMessage({ type: "recording-stopped", target: "popup" });
       }
-    };
+    }
 
-    // Start recording; optional timeslice emits smaller chunks to keep UI responsive
+    // 3) Build graph
+    audioContext = new AudioContext();
+
+    // a) sources
+    tabSourceNode = audioContext.createMediaStreamSource(tabStream);
+    if (micStream) micSourceNode = audioContext.createMediaStreamSource(micStream);
+
+    // b) mix destination for recorder
+    mixDestination = audioContext.createMediaStreamDestination();
+
+    // c) connect to recorder mix: always include tab; include mic if exists
+    tabSourceNode.connect(mixDestination);
+    if (micSourceNode) micSourceNode.connect(mixDestination);
+
+    // d) monitor to speakers: TAB ONLY (do not route mic to avoid self-echo)
+    tabSourceNode.connect(audioContext.destination);
+    try { await audioContext.resume(); } catch {}
+
+    // 4) Recorder uses the mixed destination stream
+    recorder = new MediaRecorder(mixDestination.stream, { mimeType: "audio/webm;codecs=opus" });
+    recorder.ondataavailable = (ev) => { if (ev.data && ev.data.size > 0) chunks.push(ev.data); };
+    recorder.onstop = onRecorderStop;
+
     recorder.start(1000);
     window.location.hash = "recording";
     chrome.runtime.sendMessage({ type: "update-icon", target: "service-worker", recording: true });
+
   } catch (error) {
     console.error("[offscreen] Error starting recording:", error);
     chrome.runtime.sendMessage({ type: "recording-error", target: "popup", error: error.message });
+    await cleanupAll();
+    window.location.hash = "";
   }
 }
 
@@ -109,8 +101,7 @@ async function stopRecording() {
     if (recorder && recorder.state === "recording") {
       recorder.stop();
     } else {
-      // No active recording, ensure cleanup
-      await stopAllTracks();
+      await cleanupAll();
       window.location.hash = "";
       chrome.runtime.sendMessage({ type: "update-icon", target: "service-worker", recording: false });
       chrome.runtime.sendMessage({ type: "recording-stopped", target: "popup" });
@@ -120,34 +111,59 @@ async function stopRecording() {
   }
 }
 
-async function stopAllTracks() {
+async function onRecorderStop() {
   try {
-    // Disconnect audio monitoring nodes
-    if (tabSourceNode) { 
-      try { 
-        tabSourceNode.disconnect(); 
-      } catch (err) {
-        console.warn('[offscreen] tabSourceNode disconnect error:', err);
-      } 
-      tabSourceNode = null; 
-    }
-    if (audioContext) { 
-      try { 
-        await audioContext.close(); 
-      } catch (err) {
-        console.warn('[offscreen] audioContext close error:', err);
-      } 
-      audioContext = null; 
-    }
+    const blob = new Blob(chunks, { type: "audio/webm" });
+    const url = URL.createObjectURL(blob);
+    const filename = `meet-audio-${new Date().toISOString().replace(/[:]/g, "-")}.webm`;
     
-    // Stop media stream tracks
-    if (activeStream) {
-      activeStream.getTracks().forEach(t => t.stop());
-      activeStream = null;
-    }
-    // Small delay to let tracks settle
+    // Send download request to service worker since chrome.downloads is not available in offscreen
+    chrome.runtime.sendMessage({
+      type: "download-recording",
+      target: "service-worker",
+      url: url,
+      filename: filename
+    });
+  } catch (err) {
+    console.error("[offscreen] Finalize error:", err);
+    chrome.runtime.sendMessage({ type: "recording-error", target: "popup", error: err?.message || String(err) });
+  } finally {
+    recorder = undefined;
+    chunks = [];
+    await cleanupAll();
+    window.location.hash = "";
+    chrome.runtime.sendMessage({ type: "recording-stopped", target: "service-worker" });
+    chrome.runtime.sendMessage({ type: "recording-stopped", target: "popup" });
+  }
+}
+
+async function cleanupAll() {
+  try {
+    // disconnect nodes
+    try { tabSourceNode && tabSourceNode.disconnect(); } catch {}
+    try { micSourceNode && micSourceNode.disconnect(); } catch {}
+    tabSourceNode = micSourceNode = null;
+
+    try { mixDestination && mixDestination.disconnect?.(); } catch {}
+    mixDestination = null;
+
+    // close context
+    if (audioContext) { try { await audioContext.close(); } catch {} audioContext = null; }
+
+    // stop tracks
+    if (tabStream) { try { stopStream(tabStream); } catch {} tabStream = null; }
+    if (micStream) { try { stopStream(micStream); } catch {} micStream = null; }
+
     await new Promise(r => setTimeout(r, 80));
   } catch (err) {
-    console.warn("[offscreen] stopAllTracks warn:", err);
+    console.warn("[offscreen] cleanup warn:", err);
   }
+}
+
+function stopStream(s) { s.getTracks().forEach(t => t.stop()); }
+
+function normalizePayload(p) {
+  if (!p) return { streamId: null, includeMic: false };
+  if (typeof p === 'string') return { streamId: p, includeMic: false };
+  return { streamId: p.streamId, includeMic: !!p.includeMic };
 }

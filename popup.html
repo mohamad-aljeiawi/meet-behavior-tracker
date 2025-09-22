@@ -17,7 +17,13 @@
       <button id="startRecord">Start Recording (tab)</button>
       <button id="stopRecord">Stop Recording</button>
     </div>
-    <small>Captures active tab audio only (no microphone).</small>
+
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:#333;">
+      <input type="checkbox" id="includeMic" checked />
+      Include my microphone in recording
+    </label>
+
+    <small>Captures active tab audio; mic is mixed into the recording only (not played locally).</small>
     <script src="popup.js"></script>
   </body>
 </html>

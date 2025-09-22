@@ -1,5 +1,6 @@
 const startButton = document.getElementById("startRecord");
 const stopButton  = document.getElementById("stopRecord");
+const includeMicEl = document.getElementById("includeMic");
 
 async function showByState() {
   const contexts = await chrome.runtime.getContexts({});
@@ -27,23 +28,28 @@ startButton.addEventListener('click', async () => {
       return;
     }
 
-    // Ensure offscreen is created with audio playback capability
+    // Ensure offscreen exists with the right reasons (USER_MEDIA + AUDIO_PLAYBACK)
     const contexts = await chrome.runtime.getContexts({});
     const offscreenDoc = contexts.find(c => c.contextType === 'OFFSCREEN_DOCUMENT');
     if (!offscreenDoc) {
       await chrome.offscreen.createDocument({
         url: 'offscreen.html',
-        // Use official reasons if available on this Chrome build
         reasons: [
           chrome.offscreen?.Reason?.USER_MEDIA || 'USER_MEDIA',
           chrome.offscreen?.Reason?.AUDIO_PLAYBACK || 'AUDIO_PLAYBACK'
         ],
-        justification: 'Capture tab audio and play it locally during capture.'
+        justification: 'Capture tab audio and optionally mic; play tab audio locally while recording.'
       });
     }
 
     const streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: tab.id });
-    await chrome.runtime.sendMessage({ type: 'start-recording', target: 'offscreen', data: streamId });
+    const includeMic = !!includeMicEl?.checked;
+
+    await chrome.runtime.sendMessage({
+      type: 'start-recording',
+      target: 'offscreen',
+      data: { streamId, includeMic }
+    });
 
     startButton.classList.remove('visible');
     setTimeout(() => { startButton.style.display = 'none'; stopButton.style.display = 'block'; setTimeout(() => stopButton.classList.add('visible'), 10); }, 250);
@@ -65,13 +71,7 @@ stopButton.addEventListener('click', async () => {
 
 chrome.runtime.onMessage.addListener((message) => {
   if (message.target !== 'popup') return;
-  switch (message.type) {
-    case 'recording-error':
-      alert(message.error);
-      showByState();
-      break;
-    case 'recording-stopped':
-      showByState();
-      break;
+  if (message.type === 'recording-error' || message.type === 'recording-stopped') {
+    showByState();
   }
 });
