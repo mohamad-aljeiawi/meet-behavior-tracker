@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Audio Monitoring Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        button { padding: 10px 15px; margin: 5px; cursor: pointer; }
+        .status { margin: 10px 0; padding: 10px; background: #f0f0f0; border-radius: 3px; }
+    </style>
+</head>
+<body>
+    <h1>Audio Monitoring Test for Meet Behavior Tracker</h1>
+    
+    <div class="test-section">
+        <h2>Test Instructions</h2>
+        <ol>
+            <li>Open Google Meet in another tab and join a meeting with audio</li>
+            <li>Or open YouTube and play a video with audio</li>
+            <li>Click the extension icon to open the popup</li>
+            <li>Click "Start Recording" - you should hear audio playing locally</li>
+            <li>Click "Stop Recording" - audio should stop and a .webm file should download</li>
+        </ol>
+    </div>
+
+    <div class="test-section">
+        <h2>Expected Behavior</h2>
+        <ul>
+            <li>✅ Audio plays through speakers/headphones during recording</li>
+            <li>✅ No microphone permission prompts</li>
+            <li>✅ Recording contains only tab audio (no mic)</li>
+            <li>✅ UI updates correctly when starting/stopping</li>
+            <li>✅ Extension icon changes to recording state</li>
+            <li>✅ Downloaded .webm file plays the recorded audio</li>
+        </ul>
+    </div>
+
+    <div class="test-section">
+        <h2>Troubleshooting</h2>
+        <ul>
+            <li><strong>No audio during recording:</strong> Check if offscreen was created with AUDIO_PLAYBACK reason</li>
+            <li><strong>AudioContext resume failed:</strong> This is normal on first attempt, try again after user gesture</li>
+            <li><strong>Echo/feedback:</strong> Should not happen since microphone is not captured</li>
+            <li><strong>UI not updating:</strong> Check browser console for errors</li>
+        </ul>
+    </div>
+
+    <div class="test-section">
+        <h2>Test Audio Sources</h2>
+        <p>Try these audio sources to test the implementation:</p>
+        <ul>
+            <li><a href="https://meet.google.com" target="_blank">Google Meet</a> - Join a test meeting</li>
+            <li><a href="https://www.youtube.com/watch?v=dQw4w9WgXcQ" target="_blank">YouTube Video</a> - Play any video with audio</li>
+            <li><a href="https://www.soundjay.com/misc/sounds/bell-ringing-05.wav" target="_blank">Audio Test File</a> - Simple audio file</li>
+        </ul>
+    </div>
+
+    <script>
+        // Simple test to verify AudioContext works in this context
+        function testAudioContext() {
+            try {
+                const audioContext = new AudioContext();
+                console.log('AudioContext created successfully:', audioContext.state);
+                audioContext.close();
+                document.querySelector('.status').innerHTML = '✅ AudioContext test passed';
+            } catch (err) {
+                console.error('AudioContext test failed:', err);
+                document.querySelector('.status').innerHTML = '❌ AudioContext test failed: ' + err.message;
+            }
+        }
+
+        // Add status div
+        document.body.insertAdjacentHTML('beforeend', '<div class="status">Click test button to verify AudioContext support</div>');
+        document.body.insertAdjacentHTML('beforeend', '<button onclick="testAudioContext()">Test AudioContext</button>');
+    </script>
+</body>
+</html>

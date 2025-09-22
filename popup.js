@@ -27,14 +27,18 @@ startButton.addEventListener('click', async () => {
       return;
     }
 
-    // Ensure offscreen is created
+    // Ensure offscreen is created with audio playback capability
     const contexts = await chrome.runtime.getContexts({});
     const offscreenDoc = contexts.find(c => c.contextType === 'OFFSCREEN_DOCUMENT');
     if (!offscreenDoc) {
       await chrome.offscreen.createDocument({
         url: 'offscreen.html',
-        reasons: ['USER_MEDIA'],
-        justification: 'Capture tab audio via tabCapture for Meet insights.'
+        // Use official reasons if available on this Chrome build
+        reasons: [
+          chrome.offscreen?.Reason?.USER_MEDIA || 'USER_MEDIA',
+          chrome.offscreen?.Reason?.AUDIO_PLAYBACK || 'AUDIO_PLAYBACK'
+        ],
+        justification: 'Capture tab audio and play it locally during capture.'
       });
     }
 

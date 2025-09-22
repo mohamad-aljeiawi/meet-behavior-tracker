@@ -1,6 +1,9 @@
 let recorder;
 let activeStream = null;
 let chunks = [];
+// NEW: monitor nodes for local audio playback
+let audioContext = null;
+let tabSourceNode = null;
 
 chrome.runtime.onMessage.addListener(async (message) => {
   if (message.target !== "offscreen") return;
@@ -39,7 +42,17 @@ async function startRecording(streamId) {
 
     activeStream = tabStream;
 
-    // Record tab stream directly (no AudioContext mixing, no echo)
+    // 1) Local monitor: play tab audio through speakers
+    audioContext = new AudioContext();
+    tabSourceNode = audioContext.createMediaStreamSource(tabStream);
+    tabSourceNode.connect(audioContext.destination);
+    try { 
+      await audioContext.resume(); 
+    } catch (err) {
+      console.warn('[offscreen] AudioContext resume failed:', err);
+    }
+
+    // 2) Record tab stream directly (no AudioContext mixing, no echo)
     recorder = new MediaRecorder(tabStream, {
       mimeType: "audio/webm;codecs=opus"
     });
@@ -75,7 +88,9 @@ async function startRecording(streamId) {
         chunks = [];
         await stopAllTracks();
         window.location.hash = "";
+        // Notify both SW and Popup so UI updates even if popup is open
         chrome.runtime.sendMessage({ type: "recording-stopped", target: "service-worker" });
+        chrome.runtime.sendMessage({ type: "recording-stopped", target: "popup" });
       }
     };
 
@@ -98,6 +113,7 @@ async function stopRecording() {
       await stopAllTracks();
       window.location.hash = "";
       chrome.runtime.sendMessage({ type: "update-icon", target: "service-worker", recording: false });
+      chrome.runtime.sendMessage({ type: "recording-stopped", target: "popup" });
     }
   } catch (err) {
     console.error("[offscreen] stopRecording error:", err);
@@ -106,6 +122,25 @@ async function stopRecording() {
 
 async function stopAllTracks() {
   try {
+    // Disconnect audio monitoring nodes
+    if (tabSourceNode) { 
+      try { 
+        tabSourceNode.disconnect(); 
+      } catch (err) {
+        console.warn('[offscreen] tabSourceNode disconnect error:', err);
+      } 
+      tabSourceNode = null; 
+    }
+    if (audioContext) { 
+      try { 
+        await audioContext.close(); 
+      } catch (err) {
+        console.warn('[offscreen] audioContext close error:', err);
+      } 
+      audioContext = null; 
+    }
+    
+    // Stop media stream tracks
     if (activeStream) {
       activeStream.getTracks().forEach(t => t.stop());
       activeStream = null;
