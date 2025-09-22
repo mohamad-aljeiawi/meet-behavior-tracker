@@ -55,13 +55,14 @@ async function startRecording(streamId) {
         const blob = new Blob(chunks, { type: "audio/webm" });
         const url = URL.createObjectURL(blob);
 
-        // Prefer Chrome downloads API for better UX
+        // Send blob data to service worker for download handling
         const filename = `meet-audio-${new Date().toISOString().replace(/[:]/g, "-")}.webm`;
-        try {
-          await chrome.downloads.download({ url, filename, saveAs: true });
-        } finally {
-          URL.revokeObjectURL(url);
-        }
+        chrome.runtime.sendMessage({
+          type: "download-recording",
+          target: "service-worker",
+          url: url,
+          filename: filename
+        });
       } catch (err) {
         console.error("[offscreen] Finalize error:", err);
         chrome.runtime.sendMessage({

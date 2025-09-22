@@ -33,7 +33,7 @@ startButton.addEventListener('click', async () => {
     if (!offscreenDoc) {
       await chrome.offscreen.createDocument({
         url: 'offscreen.html',
-        reasons: ['AUDIO_PLAYBACK_CAPTURE'],
+        reasons: ['USER_MEDIA'],
         justification: 'Capture tab audio via tabCapture for Meet insights.'
       });
     }
