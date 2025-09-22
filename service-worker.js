@@ -12,7 +12,7 @@ chrome.runtime.onMessage.addListener(async (message) => {
         await chrome.downloads.download({ 
           url: message.url, 
           filename: message.filename, 
-          saveAs: true 
+          saveAs: false
         });
         // Clean up the blob URL after a short delay
         setTimeout(() => {
