@@ -10,6 +10,13 @@
       #startRecord { background: #4caf50; color: #fff; display: none; }
       #stopRecord { background: #f44336; color: #fff; display: none; }
       small { color: #666; }
+      .mic-status { font-size: 12px; color: #333; border: 1px solid #dcdcdc; border-radius: 6px; padding: 8px; background: #fafafa; display: flex; flex-direction: column; gap: 6px; }
+      .mic-status .mic-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+      .mic-status button { position: static; width: auto; height: auto; padding: 4px 10px; border-radius: 4px; font-size: 12px; border: none; cursor: pointer; transition: opacity .15s ease; opacity: 1; }
+      .mic-status button.primary { background: #2962ff; color: #fff; }
+      .mic-status button.secondary { background: #e0e0e0; color: #1f1f1f; }
+      .mic-status button.primary:disabled, .mic-status button.secondary:disabled { background: #bbb; color: #666; cursor: default; }
+      .mic-status .mic-warning { color: #c62828; }
     </style>
   </head>
   <body>
@@ -22,6 +29,18 @@
       <input type="checkbox" id="includeMic" checked />
       Include my microphone in recording
     </label>
+
+    <div id="micStatus" class="mic-status" hidden>
+      <strong>Microphone access</strong>
+      <span id="micStatusText">Checking...</span>
+      <div class="mic-actions">
+        <button id="requestMic" type="button" class="primary">Allow microphone</button>
+        <button id="openPermissionHelper" type="button" class="secondary">Open permission helper</button>
+      </div>
+      <small id="micHelp" class="mic-warning" hidden>
+        Microphone is blocked. Use the permission helper above or click the lock icon in the address bar and allow the microphone for this extension.
+      </small>
+    </div>
 
     <small>Captures active tab audio; mic is mixed into the recording only (not played locally).</small>
     <script src="popup.js"></script>
