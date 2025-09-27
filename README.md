@@ -8,6 +8,19 @@ This is a work in progress and is not yet ready for production.
 
 ---
 
+### ⚠️ Disclaimer
+
+**IMPORTANT:** This tool is provided "as is" without any warranties or guarantees. The author disclaims any responsibility for any incorrect use, misuse, or unintended consequences arising from the use of this tool. Users are solely responsible for ensuring compliance with applicable laws, regulations, and terms of service when using this extension. This includes but is not limited to:
+
+- Obtaining proper consent from all meeting participants before recording
+- Complying with local privacy laws and regulations
+- Following organizational policies regarding meeting recordings
+- Respecting intellectual property rights
+
+Use this tool at your own risk and discretion.
+
+---
+
 ### Acknowledgments
 
 This project was inspired by and builds upon the excellent work from [chrome-recorder-extension](https://github.com/shebisabeen/chrome-recorder-extension) by [@shebisabeen](https://github.com/shebisabeen). The core audio recording methodology and Chrome extension architecture were adapted from that project and enhanced with Google Meet-specific speaker detection capabilities.
