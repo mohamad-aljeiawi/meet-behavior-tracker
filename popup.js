@@ -89,7 +89,7 @@ startButton.addEventListener('click', async () => {
     await chrome.runtime.sendMessage({
       type: 'start-recording',
       target: 'offscreen',
-      data: { streamId, includeMic }
+      data: { streamId, includeMic, tabId: tab.id }
     });
 
     startButton.classList.remove('visible');

@@ -1,6 +1,8 @@
 let recorder;
 let chunks = [];
 
+let activeTabId = null;
+
 // streams & nodes
 let tabStream = null;
 let micStream = null;
@@ -24,7 +26,8 @@ chrome.runtime.onMessage.addListener(async (message) => {
 });
 
 async function startRecording(payload) {
-  const { streamId, includeMic } = normalizePayload(payload);
+  const { streamId, includeMic, tabId } = normalizePayload(payload);
+  activeTabId = typeof tabId === "number" ? tabId : null;
 
   if (recorder?.state === "recording") {
     throw new Error("startRecording called while already recording");
@@ -85,6 +88,7 @@ async function startRecording(payload) {
     recorder.onstop = onRecorderStop;
 
     recorder.start(1000);
+    chrome.runtime.sendMessage({ type: "recording-started", target: "service-worker", tabId: activeTabId });
     window.location.hash = "recording";
     chrome.runtime.sendMessage({ type: "update-icon", target: "service-worker", recording: true });
 
@@ -93,6 +97,7 @@ async function startRecording(payload) {
     chrome.runtime.sendMessage({ type: "recording-error", target: "popup", error: error.message });
     await cleanupAll();
     window.location.hash = "";
+    activeTabId = null;
   }
 }
 
@@ -104,7 +109,9 @@ async function stopRecording() {
       await cleanupAll();
       window.location.hash = "";
       chrome.runtime.sendMessage({ type: "update-icon", target: "service-worker", recording: false });
+      chrome.runtime.sendMessage({ type: "recording-stopped", target: "service-worker", tabId: activeTabId });
       chrome.runtime.sendMessage({ type: "recording-stopped", target: "popup" });
+      activeTabId = null;
     }
   } catch (err) {
     console.error("[offscreen] stopRecording error:", err);
@@ -112,10 +119,11 @@ async function stopRecording() {
 }
 
 async function onRecorderStop() {
+  const tabId = activeTabId;
   try {
     const blob = new Blob(chunks, { type: "audio/webm" });
     const url = URL.createObjectURL(blob);
-    const filename = `meet-audio-${new Date().toISOString().replace(/[:]/g, "-")}.webm`;
+    const filename = "meeting_audio.webm";
     
     // Send download request to service worker since chrome.downloads is not available in offscreen
     chrome.runtime.sendMessage({
@@ -132,8 +140,9 @@ async function onRecorderStop() {
     chunks = [];
     await cleanupAll();
     window.location.hash = "";
-    chrome.runtime.sendMessage({ type: "recording-stopped", target: "service-worker" });
+    chrome.runtime.sendMessage({ type: "recording-stopped", target: "service-worker", tabId });
     chrome.runtime.sendMessage({ type: "recording-stopped", target: "popup" });
+    activeTabId = null;
   }
 }
 
@@ -163,7 +172,10 @@ async function cleanupAll() {
 function stopStream(s) { s.getTracks().forEach(t => t.stop()); }
 
 function normalizePayload(p) {
-  if (!p) return { streamId: null, includeMic: false };
-  if (typeof p === 'string') return { streamId: p, includeMic: false };
-  return { streamId: p.streamId, includeMic: !!p.includeMic };
+  if (!p) return { streamId: null, includeMic: false, tabId: null };
+  if (typeof p === "string") return { streamId: p, includeMic: false, tabId: null };
+  const tabId = typeof p.tabId === "number" ? p.tabId : null;
+  return { streamId: p.streamId, includeMic: !!p.includeMic, tabId };
 }
+
+

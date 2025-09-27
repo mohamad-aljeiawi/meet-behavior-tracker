@@ -21,6 +21,14 @@
     "service_worker": "service-worker.js"
   },
 
+  "content_scripts": [
+    {
+      "matches": ["https://meet.google.com/*"],
+      "js": ["content_script.js"],
+      "run_at": "document_idle"
+    }
+  ],
+
   "permissions": [
     "tabCapture",
     "offscreen",
@@ -33,3 +41,4 @@
     "https://meet.google.com/*"
   ]
 }
+
